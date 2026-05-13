@@ -32,13 +32,10 @@ def run_experiment(
     Returns:
         ExperimentResult with all collected measurements.
     """
-    # Divide the total packet quota evenly across producers.
     packets_per_producer = max(1, total_packets // num_producers)
  
-    # ── Create shared bounded buffer ─────────────────────────────
     queue = ThreadSafeBoundedQueue(maxsize=buffer_size)
  
-    # ── Instantiate threads ───────────────────────────────────────
     consumers: List[TelemetryConsumer] = [
         TelemetryConsumer(
             consumer_id=i,
@@ -52,20 +49,16 @@ def run_experiment(
         TelemetryProducer(
             producer_id=i,
             queue=queue,
-            production_delay=0.0,   # max production speed
+            production_delay=0.0,   
         )
         for i in range(num_producers)
     ]
  
     experiment_start = time.perf_counter()
  
-    # ── Start consumers FIRST ─────────────────────────────────────
-    # Prevents producers from immediately filling the queue and
-    # blocking before any consumer is scheduled.
     for c in consumers:
         c.start()
  
-    # ── Start producers ───────────────────────────────────────────
     for p in producers:
         p.start()
  
@@ -75,8 +68,6 @@ def run_experiment(
         f"({packets_per_producer:,}/producer)"
     )
  
-    # ── Wait for each producer to meet its quota ──────────────────
-    # Polling interval of 5 ms is fine here: we are not in a hot loop.
     for p in producers:
         while p.packets_produced < packets_per_producer:
             if not p.is_alive():
@@ -84,19 +75,14 @@ def run_experiment(
             time.sleep(0.005)
         p.stop()
  
-    # Ensure all producer threads have fully exited before we send pills.
     for p in producers:
         p.join(timeout=15)
         if p.is_alive():
             logger.warning(f"  [{p.name}] did not terminate cleanly.")
  
-    # ── Send one Poison Pill per consumer ─────────────────────────
-    # Consumers will finish draining any remaining real packets from
-    # the queue before consuming their pill and exiting.
     for _ in consumers:
         queue.put(POISON_PILL)
  
-    # ── Wait for all consumers to drain and terminate ─────────────
     for c in consumers:
         c.join(timeout=120)
         if c.is_alive():
@@ -104,7 +90,6 @@ def run_experiment(
  
     elapsed = time.perf_counter() - experiment_start
  
-    # ── Collect metrics ───────────────────────────────────────────
     total_consumed = sum(c.packets_consumed for c in consumers)
     queue_stats    = queue.get_stats()
  

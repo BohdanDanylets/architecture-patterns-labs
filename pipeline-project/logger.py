@@ -27,8 +27,6 @@ def setup_logger(name: str, level: int = logging.DEBUG) -> logging.Logger:
         handler.setFormatter(formatter)
         logger.addHandler(handler)
  
-    # Prevent log records from propagating to the root logger
-    # (avoids duplicate output when root logger is also configured).
     logger.propagate = False
  
     return logger

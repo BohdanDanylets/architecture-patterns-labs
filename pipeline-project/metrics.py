@@ -16,17 +16,13 @@ class StageMetrics:
         self.stage_name = stage_name
         self._lock = threading.Lock()
  
-        self._processing_times: List[float] = []  # per-item processing durations
+        self._processing_times: List[float] = [] 
         self._items_processed: int = 0
-        self._total_blocked_time: float = 0.0      # cumulative wait-on-full-queue time
+        self._total_blocked_time: float = 0.0     
  
-        # Wall-clock start/end set by the orchestrator
         self._start_time: float = 0.0
         self._end_time: float = 0.0
  
-    # ------------------------------------------------------------------
-    # Mutation API (called from metrics drain loop)
-    # ------------------------------------------------------------------
  
     def record_processing_time(self, elapsed: float) -> None:
         with self._lock:
@@ -42,10 +38,6 @@ class StageMetrics:
  
     def mark_end(self) -> None:
         self._end_time = time.perf_counter()
- 
-    # ------------------------------------------------------------------
-    # Read-only properties
-    # ------------------------------------------------------------------
  
     @property
     def avg_processing_time(self) -> float:

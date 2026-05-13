@@ -27,32 +27,19 @@ class ThreadSafeBoundedQueue:
  
         self._maxsize: int = maxsize
  
-        # Internal FIFO storage — not thread-safe on its own.
         self._deque: collections.deque = collections.deque()
  
-        # ── Synchronisation primitives ──────────────────────────────
-        # Single mutex that all Conditions share.
         self._mutex = threading.Lock()
  
-        # Producers wait here when the buffer is full.
-        # Bound to _mutex so Condition.wait() releases _mutex while sleeping.
         self._not_full: threading.Condition = threading.Condition(self._mutex)
  
-        # Consumers wait here when the buffer is empty.
         self._not_empty: threading.Condition = threading.Condition(self._mutex)
  
-        # ── Analytics counters (protected by _stats_lock) ───────────
-        # Kept separate from _mutex to avoid holding the hot-path lock
-        # while incrementing counters.
         self._stats_lock = threading.Lock()
-        self._producer_blocks: int = 0   # #times a producer had to wait
-        self._consumer_blocks: int = 0   # #times a consumer had to wait
+        self._producer_blocks: int = 0  
+        self._consumer_blocks: int = 0   
         self._total_enqueued: int  = 0
         self._total_dequeued: int  = 0
- 
-    # ══════════════════════════════════════════════════════════════════
-    # Public API
-    # ══════════════════════════════════════════════════════════════════
  
     def put(self, item: Any, timeout: Optional[float] = None) -> bool:
         """
@@ -85,31 +72,22 @@ class ThreadSafeBoundedQueue:
         blocked    = False
         deadline   = (time.monotonic() + timeout) if timeout is not None else None
  
-        with self._not_full:                          # acquires _mutex
-            # Predicate loop guards against spurious wake-ups (per POSIX).
+        with self._not_full:                         
             while len(self._deque) >= self._maxsize:
                 blocked = True
  
                 if deadline is not None:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0.0:
-                        return False                  # timed out
-                    # Atomically release _mutex and sleep for up to `remaining`s.
+                        return False                 
                     self._not_full.wait(timeout=remaining)
                 else:
-                    # Atomically release _mutex and sleep indefinitely.
                     self._not_full.wait()
  
-            # Critical section: _mutex is held here.
             self._deque.append(item)
  
-            # Wake ONE waiting consumer.  Using notify() (not notify_all())
-            # avoids the "thundering herd" problem — only one thread can
-            # consume the single newly available item anyway.
             self._not_empty.notify()
-        # _mutex released automatically by Condition.__exit__
- 
-        # Update analytics outside the hot-path lock.
+
         with self._stats_lock:
             self._total_enqueued += 1
             if blocked:
@@ -144,7 +122,7 @@ class ThreadSafeBoundedQueue:
         blocked  = False
         deadline = (time.monotonic() + timeout) if timeout is not None else None
  
-        with self._not_empty:                         # acquires _mutex
+        with self._not_empty:                     
             while len(self._deque) == 0:
                 blocked = True
  
@@ -156,10 +134,8 @@ class ThreadSafeBoundedQueue:
                 else:
                     self._not_empty.wait()
  
-            # Critical section: _mutex held.
             item = self._deque.popleft()
  
-            # Signal ONE blocked producer that there is now space.
             self._not_full.notify()
  
         with self._stats_lock:
@@ -169,9 +145,6 @@ class ThreadSafeBoundedQueue:
  
         return item
  
-    # ══════════════════════════════════════════════════════════════════
-    # Inspection helpers
-    # ══════════════════════════════════════════════════════════════════
  
     def size(self) -> int:
         """Snapshot of the current number of items (may be stale immediately)."""
@@ -190,9 +163,6 @@ class ThreadSafeBoundedQueue:
     def maxsize(self) -> int:
         return self._maxsize
  
-    # ══════════════════════════════════════════════════════════════════
-    # Analytics
-    # ══════════════════════════════════════════════════════════════════
  
     def get_stats(self) -> dict:
         """Return a snapshot of internal counters (thread-safe read)."""

@@ -30,9 +30,6 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
  
  
-# ══════════════════════════════════════════════════════════════════════
-#  Experiment 1 — vary Producer/Consumer ratio
-# ══════════════════════════════════════════════════════════════════════
  
 def run_experiment1(
     total_packets:    int,
@@ -75,9 +72,6 @@ def run_experiment1(
     return results
  
  
-# ══════════════════════════════════════════════════════════════════════
-#  Experiment 2 — vary buffer size
-# ══════════════════════════════════════════════════════════════════════
  
 def run_experiment2(
     total_packets:    int,
@@ -120,16 +114,12 @@ def run_experiment2(
     return results
  
  
-# ══════════════════════════════════════════════════════════════════════
-#  Conclusions
-# ══════════════════════════════════════════════════════════════════════
  
 def print_conclusions(exp1: list, exp2: list) -> None:
     best1  = max(exp1, key=lambda r: r.throughput)
     worst1 = min(exp1, key=lambda r: r.throughput)
     best2  = max(exp2, key=lambda r: r.throughput)
  
-    # Check whether consumer blocks dominate in 1P/10C
     one_p_ten_c = next((r for r in exp1 if r.num_producers == 1), None)
     ten_p_one_c = next((r for r in exp1 if r.num_consumers == 1), None)
  
@@ -195,10 +185,6 @@ def print_conclusions(exp1: list, exp2: list) -> None:
 """)
     print("=" * 72)
  
- 
-# ══════════════════════════════════════════════════════════════════════
-#  Entry point
-# ══════════════════════════════════════════════════════════════════════
  
 def main() -> None:
     args = parse_args()

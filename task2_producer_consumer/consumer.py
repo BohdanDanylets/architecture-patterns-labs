@@ -36,21 +36,15 @@ class TelemetryConsumer(threading.Thread):
         self._queue            = queue
         self._processing_delay = processing_delay
  
-        # ── Aggregation state (private to this thread — no locking needed) ──
         self._values: List[float] = []
         self._ema:    float       = 0.0
-        self._ema_alpha: float    = 0.1   # smoothing factor
+        self._ema_alpha: float    = 0.1   
  
-        # ── Analytics ────────────────────────────────────────────────
         self.packets_consumed:       int   = 0
-        self.total_processing_time:  float = 0.0  # CPU time spent in _process()
-        self.total_blocked_time:     float = 0.0  # time waiting in queue.get()
+        self.total_processing_time:  float = 0.0  
+        self.total_blocked_time:     float = 0.0  
         self._start_time: Optional[float] = None
         self._end_time:   Optional[float] = None
- 
-    # ------------------------------------------------------------------
-    # Private processing logic
-    # ------------------------------------------------------------------
  
     def _process_packet(self, packet: TelemetryPacket) -> tuple:
         """
@@ -76,40 +70,30 @@ class TelemetryConsumer(threading.Thread):
         self._values.append(v)
         n = len(self._values)
  
-        # Running mean
         mean = sum(self._values) / n
  
-        # Running std-dev (population formula)
         variance = sum((x - mean) ** 2 for x in self._values) / n
         std_dev  = math.sqrt(variance) if variance > 0 else 0.0
  
-        # Exponential Moving Average
         self._ema = self._ema_alpha * v + (1.0 - self._ema_alpha) * self._ema
  
-        # CPU-bound artificial work — simulates checksum / decryption
         _ = sum(math.sqrt(i) for i in range(1, 500))
  
-        # Simulated I/O / heavy computation delay
         if self._processing_delay > 0:
             time.sleep(self._processing_delay)
  
         return mean, std_dev
  
-    # ------------------------------------------------------------------
-    # Thread entry point
-    # ------------------------------------------------------------------
  
     def run(self) -> None:
         self._start_time = time.perf_counter()
         logger.debug(f"[{self.name}] Started")
  
         while True:
-            # ── Block until an item is available ──────────────────────
             t_get = time.perf_counter()
             item  = self._queue.get()   # Releases CPU while waiting
             self.total_blocked_time += time.perf_counter() - t_get
  
-            # ── Poison Pill → graceful shutdown ───────────────────────
             if item is POISON_PILL:
                 logger.debug(
                     f"[{self.name}] Received Poison Pill — shutting down "
@@ -117,7 +101,6 @@ class TelemetryConsumer(threading.Thread):
                 )
                 break
  
-            # ── Process the packet ────────────────────────────────────
             packet: TelemetryPacket = item
  
             t_proc = time.perf_counter()
@@ -127,7 +110,6 @@ class TelemetryConsumer(threading.Thread):
             self.packets_consumed      += 1
             self.total_processing_time += proc_elapsed
  
-            # Periodic debug log (every 1 000 packets to avoid flooding)
             if self.packets_consumed % 1_000 == 0:
                 logger.debug(
                     f"[{self.name}] Consumed {self.packets_consumed:>7} | "
@@ -139,9 +121,6 @@ class TelemetryConsumer(threading.Thread):
             f"[{self.name}] Finished — consumed {self.packets_consumed} packets"
         )
  
-    # ------------------------------------------------------------------
-    # Analytics
-    # ------------------------------------------------------------------
  
     @property
     def elapsed_time(self) -> float:

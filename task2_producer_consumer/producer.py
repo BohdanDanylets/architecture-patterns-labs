@@ -11,7 +11,6 @@ from logger import setup_logger
  
 logger = setup_logger("Producer")
  
-# Sentinel value shared with consumer.py — signals shutdown to consumers.
 POISON_PILL = None
  
  
@@ -59,18 +58,13 @@ class TelemetryProducer(threading.Thread):
         self._num_sensors     = num_sensors
         self._production_delay = production_delay
  
-        # Shutdown signal — set by the main thread via stop()
         self._stop_event = threading.Event()
  
-        # ── Analytics ────────────────────────────────────────────────
         self.packets_produced:    int   = 0
-        self.total_blocked_time:  float = 0.0  # cumulative time blocked in put()
+        self.total_blocked_time:  float = 0.0  
         self._start_time: Optional[float] = None
         self._end_time:   Optional[float] = None
  
-    # ------------------------------------------------------------------
-    # Control API
-    # ------------------------------------------------------------------
  
     def stop(self) -> None:
         """
@@ -79,27 +73,19 @@ class TelemetryProducer(threading.Thread):
         """
         self._stop_event.set()
  
-    # ------------------------------------------------------------------
-    # Thread entry point
-    # ------------------------------------------------------------------
- 
     def run(self) -> None:
         self._start_time = time.perf_counter()
         logger.debug(f"[{self.name}] Started (sensors={self._num_sensors})")
  
         while not self._stop_event.is_set():
-            # Build a realistic telemetry packet
             packet = TelemetryPacket(
                 sensor_id=f"SENSOR_{random.randint(1, self._num_sensors):03d}",
                 timestamp=time.time(),
-                # Gaussian distribution centred at 50, σ=15 — simulates
-                # real-world temperature / voltage / humidity readings.
                 value=round(random.gauss(50.0, 15.0), 4),
                 producer_id=self.producer_id,
             )
  
             t0 = time.perf_counter()
-            # Blocking call — will sleep if queue is full (backpressure).
             success = self._queue.put(packet)
             blocked_duration = time.perf_counter() - t0
  
@@ -107,8 +93,6 @@ class TelemetryProducer(threading.Thread):
                 self.packets_produced   += 1
                 self.total_blocked_time += blocked_duration
  
-            # Optional throttle — useful when testing small buffer sizes
-            # to avoid overwhelming the consumer pool.
             if self._production_delay > 0:
                 time.sleep(self._production_delay)
  
@@ -117,9 +101,6 @@ class TelemetryProducer(threading.Thread):
             f"[{self.name}] Stopped — produced {self.packets_produced} packets"
         )
  
-    # ------------------------------------------------------------------
-    # Analytics
-    # ------------------------------------------------------------------
  
     @property
     def elapsed_time(self) -> float:

@@ -5,15 +5,9 @@ import multiprocessing as mp
 from PIL import Image, ImageFilter
 import numpy as np
  
-# ---------------------------------------------------------------------------
-# Sentinel value — the Poison Pill that signals end-of-stream
-# ---------------------------------------------------------------------------
 POISON_PILL = None
  
  
-# ===========================================================================
-#  STAGE 1 — ImageLoader (Source)
-# ===========================================================================
  
 def image_loader_worker(
     image_paths: list,
@@ -36,13 +30,10 @@ def image_loader_worker(
         try:
             t_start = time.perf_counter()
  
-            # Open and immediately copy the image so the file handle is
-            # released.  copy() is required because PIL opens files lazily.
             img = Image.open(path).copy()
  
             processing_elapsed = time.perf_counter() - t_start
  
-            # Measure how long put() blocks (= time waiting on full queue)
             t_put = time.perf_counter()
             out_queue.put((str(path), img))         # Blocks if queue is full
             blocked = max(0.0, time.perf_counter() - t_put - processing_elapsed)
@@ -60,14 +51,10 @@ def image_loader_worker(
                 "path":  str(path),
             })
  
-    # Signal: no more images
     out_queue.put(POISON_PILL)
     metrics_queue.put({"stage": stage_name, "done": True})
  
  
-# ===========================================================================
-#  STAGE 2 — ImageResizer (Filter 1)
-# ===========================================================================
  
 def image_resizer_worker(
     in_queue: mp.Queue,
@@ -89,10 +76,10 @@ def image_resizer_worker(
     stage_name = "ImageResizer"
  
     while True:
-        item = in_queue.get()            # Block until Loader produces an item
+        item = in_queue.get()        
  
         if item is POISON_PILL:
-            out_queue.put(POISON_PILL)   # Propagate shutdown to Processor
+            out_queue.put(POISON_PILL)  
             metrics_queue.put({"stage": stage_name, "done": True})
             break
  
@@ -101,7 +88,6 @@ def image_resizer_worker(
         try:
             t_start = time.perf_counter()
  
-            # Ensure consistent colour depth before resize
             img_rgb = img.convert("RGB")
             resized  = img_rgb.resize(target_size, Image.Resampling.LANCZOS)
  
@@ -121,9 +107,6 @@ def image_resizer_worker(
             metrics_queue.put({"stage": stage_name, "error": str(exc), "path": path})
  
  
-# ===========================================================================
-#  STAGE 3 — ImageProcessor (Filter 2) — CPU-heavy
-# ===========================================================================
  
 def image_processor_worker(
     in_queue: mp.Queue,
@@ -161,30 +144,23 @@ def image_processor_worker(
         try:
             t_start = time.perf_counter()
  
-            # --- Step 1: Normalise input ---
             rgb = img.convert("RGB")
  
-            # --- Step 2: Grayscale ---
             gray = rgb.convert("L")
  
-            # --- Step 3: Gaussian blur (noise suppression) ---
             blurred = gray.filter(ImageFilter.GaussianBlur(radius=2))
  
-            # --- Step 4: Edge detection (Sobel-like built-in kernel) ---
             edges = blurred.filter(ImageFilter.FIND_EDGES)
  
-            # --- Step 5: Sharpening via Unsharp Mask ---
             sharpened = edges.filter(
                 ImageFilter.UnsharpMask(radius=3, percent=200, threshold=3)
             )
  
-            # --- Step 6: Numpy min-max normalisation (histogram stretch) ---
             arr = np.array(sharpened, dtype=np.float32)
             arr_min, arr_max = arr.min(), arr.max()
             arr_norm = (arr - arr_min) / (arr_max - arr_min + 1e-8) * 255.0
             normalised = Image.fromarray(arr_norm.astype(np.uint8), mode="L")
  
-            # --- Step 7: Back to RGB for JPEG output ---
             result = normalised.convert("RGB")
  
             proc_elapsed = time.perf_counter() - t_start
@@ -203,9 +179,6 @@ def image_processor_worker(
             metrics_queue.put({"stage": stage_name, "error": str(exc), "path": path})
  
  
-# ===========================================================================
-#  STAGE 4 — ImageSaver (Sink)
-# ===========================================================================
  
 def image_saver_worker(
     in_queue: mp.Queue,

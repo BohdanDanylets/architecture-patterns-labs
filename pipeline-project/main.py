@@ -2,7 +2,6 @@ import argparse
 import sys
 from pathlib import Path
  
-# Allow importing sibling modules without installing the package
 sys.path.insert(0, str(Path(__file__).parent))
  
 from pipeline import ImagePipeline
@@ -11,9 +10,6 @@ from logger import setup_logger
  
 logger = setup_logger("Main")
  
-# ---------------------------------------------------------------------------
-# Paths relative to this script's directory
-# ---------------------------------------------------------------------------
 INPUT_DIR  = str(Path(__file__).parent / "input")
 OUTPUT_DIR = str(Path(__file__).parent / "output")
  
@@ -46,7 +42,6 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
  
-    # Parse target size
     try:
         w, h = map(int, args.size.lower().split("x"))
         target_size = (w, h)
@@ -83,8 +78,6 @@ def main() -> None:
  
  
 if __name__ == "__main__":
-    # freeze_support() is required on Windows when using multiprocessing
-    # with a frozen executable (e.g. PyInstaller).  No-op on Linux/macOS.
     import multiprocessing
     multiprocessing.freeze_support()
     main()

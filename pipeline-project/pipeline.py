@@ -14,9 +14,6 @@ from logger import setup_logger
  
 logger = setup_logger("Pipeline")
  
-# Default queue capacity — tune based on available RAM.
-# Lower → less memory pressure, more backpressure blocking.
-# Higher → smoother flow, larger memory footprint per queue.
 QUEUE_CAPACITY = 10
  
  
@@ -44,10 +41,6 @@ class ImagePipeline:
         self.queue_capacity = queue_capacity
         self.metrics        = PipelineMetrics()
  
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
- 
     def _collect_images(self) -> List[str]:
         """Scan input_dir for supported image formats."""
         extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
@@ -74,7 +67,7 @@ class ImagePipeline:
         stages_done = 0
  
         while stages_done < expected_done:
-            msg = metrics_queue.get()  # Blocks until a worker sends data
+            msg = metrics_queue.get()  
  
             if "error" in msg:
                 logger.error(
@@ -89,7 +82,6 @@ class ImagePipeline:
                 stages_done += 1
                 continue
  
-            # Accumulate timing data for this stage
             sm = self.metrics.get_stage(msg["stage"])
             if "processing_time" in msg:
                 sm.record_processing_time(msg["processing_time"])
@@ -98,10 +90,6 @@ class ImagePipeline:
  
             if "output_path" in msg:
                 logger.debug(f"[ImageSaver] ✓ Saved '{Path(msg['output_path']).name}'")
- 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
  
     def run(self) -> PipelineMetrics:
         """
@@ -115,18 +103,12 @@ class ImagePipeline:
             logger.warning("No images found — nothing to process.")
             return self.metrics
  
-        # --- Create inter-stage bounded queues ---
-        # maxsize enforces backpressure: a full queue blocks the upstream stage.
-        q1 = mp.Queue(maxsize=self.queue_capacity)   # Loader   → Resizer
-        q2 = mp.Queue(maxsize=self.queue_capacity)   # Resizer  → Processor
-        q3 = mp.Queue(maxsize=self.queue_capacity)   # Processor→ Saver
+        q1 = mp.Queue(maxsize=self.queue_capacity)   
+        q2 = mp.Queue(maxsize=self.queue_capacity)   
+        q3 = mp.Queue(maxsize=self.queue_capacity)   
  
-        # Unbounded metrics channel — never blocks workers
         mq = mp.Queue()
  
-        # --- Assemble worker processes ---
-        # Processes are created as daemons so they are killed automatically
-        # if the main process exits unexpectedly.
         processes = [
             mp.Process(
                 target=image_loader_worker,
@@ -159,19 +141,14 @@ class ImagePipeline:
             f"target={self.target_size} | queue_capacity={self.queue_capacity}"
         )
  
-        # --- Mark start times and launch ---
         self.metrics.mark_pipeline_start()
         for proc in processes:
             self.metrics.get_stage(proc.name).mark_start()
             proc.start()
             logger.info(f"  ✓ Started {proc.name}  (PID {proc.pid})")
  
-        # --- Drain metrics in main process ---
-        # This call blocks until ALL stages have sent their 'done' signal,
-        # which happens only after every image has been saved.
         self._drain_metrics(mq, expected_done=len(processes))
  
-        # --- Clean shutdown: join all child processes ---
         for proc in processes:
             proc.join(timeout=30)
             if proc.is_alive():

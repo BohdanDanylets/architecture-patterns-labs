@@ -4,7 +4,7 @@ from typing import List
  
 try:
     import matplotlib
-    matplotlib.use("Agg")           # Non-interactive backend — works on servers
+    matplotlib.use("Agg")          
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
     _MPL = True
@@ -19,13 +19,13 @@ class ExperimentResult:
     num_producers:           int
     num_consumers:           int
     buffer_size:             int
-    total_packets:           int    # actually consumed
-    elapsed_time:            float  # wall-clock seconds
-    throughput:              float  # packets / second
-    producer_blocks:         int    # times producers waited on full queue
-    consumer_blocks:         int    # times consumers waited on empty queue
-    avg_producer_throughput: float  # avg pkt/s across producer threads
-    avg_consumer_throughput: float  # avg pkt/s across consumer threads
+    total_packets:           int    
+    elapsed_time:            float  
+    throughput:              float  
+    producer_blocks:         int    
+    consumer_blocks:         int    
+    avg_producer_throughput: float  
+    avg_consumer_throughput: float 
  
  
 class MetricsCollector:
@@ -37,9 +37,6 @@ class MetricsCollector:
     def record(self, result: ExperimentResult) -> None:
         self.results.append(result)
  
-    # ------------------------------------------------------------------
-    # Table printers
-    # ------------------------------------------------------------------
  
     @staticmethod
     def print_experiment1_table(results: List[ExperimentResult]) -> None:
@@ -82,9 +79,6 @@ class MetricsCollector:
             )
         print(f"{SEP}\n")
  
-    # ------------------------------------------------------------------
-    # Visualisation
-    # ------------------------------------------------------------------
  
     @staticmethod
     def generate_plots(
@@ -111,7 +105,6 @@ class MetricsCollector:
         )
         gs = gridspec.GridSpec(2, 3, figure=fig, hspace=0.50, wspace=0.38)
  
-        # ── Colour palette ──────────────────────────────────────────
         BLUE   = "#2196F3"
         GREEN  = "#4CAF50"
         RED    = "#F44336"
@@ -119,7 +112,6 @@ class MetricsCollector:
         PURPLE = "#9C27B0"
         TEAL   = "#009688"
  
-        # ── Experiment 1 data ───────────────────────────────────────
         configs      = [f"{r.num_producers}P/{r.num_consumers}C" for r in exp1_results]
         throughput1  = [r.throughput       for r in exp1_results]
         times1       = [r.elapsed_time     for r in exp1_results]
@@ -127,7 +119,6 @@ class MetricsCollector:
         c_blocks1    = [r.consumer_blocks  for r in exp1_results]
         colors1      = [BLUE, GREEN, RED]
  
-        # — E1 subplot 1: Throughput —
         ax0 = fig.add_subplot(gs[0, 0])
         bars = ax0.bar(configs, throughput1, color=colors1, edgecolor="white", linewidth=0.8)
         ax0.set_title("Exp 1 — Throughput by Config", fontweight="bold")
@@ -142,14 +133,12 @@ class MetricsCollector:
             )
         ax0.set_ylim(0, max(throughput1) * 1.20)
  
-        # — E1 subplot 2: Execution time —
         ax1 = fig.add_subplot(gs[0, 1])
         ax1.bar(configs, times1, color=colors1, edgecolor="white", linewidth=0.8)
         ax1.set_title("Exp 1 — Execution Time by Config", fontweight="bold")
         ax1.set_ylabel("Time (seconds)")
         ax1.set_xlabel("Configuration")
  
-        # — E1 subplot 3: Blocking events —
         ax2 = fig.add_subplot(gs[0, 2])
         x     = range(len(configs))
         width = 0.35
@@ -167,7 +156,6 @@ class MetricsCollector:
         ax2.set_xticklabels(configs)
         ax2.legend(fontsize=8)
  
-        # ── Experiment 2 data ───────────────────────────────────────
         buf_sizes    = [r.buffer_size      for r in exp2_results]
         throughput2  = [r.throughput       for r in exp2_results]
         p_blocks2    = [r.producer_blocks  for r in exp2_results]
@@ -189,7 +177,6 @@ class MetricsCollector:
             ax.set_xticklabels([str(b) for b in buf_sizes])
             ax.grid(True, which="both", alpha=0.25)
  
-        # — E2 subplot 1: Throughput —
         _log_line_chart(
             fig.add_subplot(gs[1, 0]),
             buf_sizes, throughput2, TEAL,
@@ -197,7 +184,6 @@ class MetricsCollector:
             "Packets / second",
         )
  
-        # — E2 subplot 2: Producer blocks —
         _log_line_chart(
             fig.add_subplot(gs[1, 1]),
             buf_sizes, p_blocks2, ORANGE,
@@ -205,7 +191,6 @@ class MetricsCollector:
             "Block Count",
         )
  
-        # — E2 subplot 3: Consumer blocks —
         _log_line_chart(
             fig.add_subplot(gs[1, 2]),
             buf_sizes, c_blocks2, PURPLE,
@@ -213,7 +198,6 @@ class MetricsCollector:
             "Block Count",
         )
  
-        # ── Save ────────────────────────────────────────────────────
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output_path, dpi=150, bbox_inches="tight")
         print(f"\n[Metrics] Chart saved → {output_path}")
